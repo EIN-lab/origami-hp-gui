@@ -212,7 +212,7 @@ if strcmp(get(hObject,'String'),'Connect') % currently disconnected
             % check status
             handles.timer = timer(...
                 'ExecutionMode', 'fixedRate', ...       % Run timer repeatedly.
-                'Period', 1, ...                        % Initial period is 1 sec.
+                'Period', 5, ...                        % Initial period is 1 sec.
                 'TimerFcn', @(~,~)check_status(handles)); % Specify callback function.
             start(handles.timer)
             
@@ -233,9 +233,6 @@ if strcmp(get(hObject,'String'),'Connect') % currently disconnected
         
     end
 else
-    
-    stop(handles.timer)
-    
     set(handles.Tx_send, 'Enable', 'Off');
     set(handles.open_push, 'Enable', 'Off');
     
@@ -317,7 +314,7 @@ else
     rectangle('Curvature',[1 1], 'FaceColor', 'green');
     axis off equal
     set(handles.open_push, 'Enable', 'On');
-    set(handles.err_text, 'String', 'No errors');
+    set(handles.e
 end
 end % end of check_status
 

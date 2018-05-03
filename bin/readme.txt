@@ -2,27 +2,27 @@ MATLAB Compiler
 
 1. Prerequisites for Deployment 
 
-. Verify the MATLAB Runtime is installed and ensure you    
-  have installed version 9.2 (R2017a).   
+. Verify the MATLAB Compiler Runtime (MCR) is installed and ensure you    
+  have installed version 8.0 (R2012b).   
 
-. If the MATLAB Runtime is not installed, do the following:
+. If the MCR is not installed, do the following:
   (1) enter
   
       >>mcrinstaller
       
       at MATLAB prompt. The MCRINSTALLER command displays the 
-      location of the MATLAB Runtime installer.
+      location of the MCR Installer.
 
-  (2) run the MATLAB Runtime installer.
+  (2) run the MCR Installer.
 
-Or download the Windows 64-bit version of the MATLAB Runtime for R2017a 
+Or download the Windows 64-bit version of the MCR for R2012b 
 from the MathWorks Web site by navigating to
 
    http://www.mathworks.com/products/compiler/mcr/index.html
    
    
-For more information about the MATLAB Runtime and the MATLAB Runtime installer, see 
-Package and Distribute in the MATLAB Compiler documentation  
+For more information about the MCR and the MCR Installer, see 
+Distribution to End Users in the MATLAB Compiler documentation  
 in the MathWorks Documentation Center.    
 
 
@@ -35,9 +35,9 @@ Files to package for Standalone
 ================================
 -OrigamiHP.exe
 -MCRInstaller.exe 
-   -if end users are unable to download the MATLAB Runtime using the above  
+   -if end users are unable to download the MCR using the above  
     link, include it when building your component by clicking 
-    the "Runtime downloaded from web" link in the Deployment Tool
+    the "Add MCR" link in the Deployment Tool
 -This readme file 
 
 3. Definitions
@@ -45,7 +45,7 @@ Files to package for Standalone
 For information on deployment terminology, go to 
 http://www.mathworks.com/help. Select MATLAB Compiler >   
 Getting Started > About Application Deployment > 
-Deployment Product Terms in the MathWorks Documentation 
+Application Deployment Terms in the MathWorks Documentation 
 Center.
 
 
