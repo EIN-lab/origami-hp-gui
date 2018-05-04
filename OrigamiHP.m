@@ -111,7 +111,7 @@ set(hObject, 'String', '');
 
 done=0;
 while ~done
-    [done, handles] = receive_data(handles);
+    [done, handles] = receive_data(handles, 0);
 end
 end
 
@@ -129,7 +129,7 @@ end
 end
 
 % --- Executes on button press in rxButton.
-function [done, handles, RxText] = receive_data(handles)
+function [done, handles, RxText] = receive_data(handles, doSilent)
 wngState = warning();
 warning('Off', 'MATLAB:serial:fscanf:unsuccessfulRead');
 done = 0;
@@ -141,10 +141,14 @@ try
        done = 1;
        return
     else
-        set(handles.history_box, 'String', ...
-            [currList ; ['< ' RxText ] ]);
+        if ~doSilent
+            set(handles.history_box, 'String', ...
+                [currList ; ['< ' RxText ] ]);
+        end
     end
-    set(handles.history_box, 'Value', length(currList) + 1 );
+    if ~doSilent
+        set(handles.history_box, 'Value', length(currList) + 1 );
+    end
 catch e
     disp(e)
     done=1;
@@ -166,7 +170,9 @@ end
 end
 
 % --- Executes on button press in connectButton.
-function connectButton_Callback(hObject, eventdata, handles)    
+function connectButton_Callback(hObject, eventdata, handles)
+isConnect = 0;
+isDisconnect = 0;
 if strcmp(get(hObject,'String'),'Connect') % currently disconnected
     serPortn = get(handles.portList, 'Value');
     if serPortn == 1
@@ -191,7 +197,7 @@ if strcmp(get(hObject,'String'),'Connect') % currently disconnected
             resp = {};
             linecount = 1;
             while ~done
-                [done, handles, resp{linecount}] = receive_data(handles);
+                [done, handles, resp{linecount}] = receive_data(handles, 0);
                 linecount = linecount + 1;
             end
             
@@ -210,24 +216,26 @@ if strcmp(get(hObject,'String'),'Connect') % currently disconnected
             
             % enable Tx text field and Rx button
             set(handles.Tx_send, 'Enable', 'On');
-            set(handles.open_push, 'Enable', 'On');
+            set(handles.open_push, 'Enable', 'Off');
             
             % check status
             handles.timer = timer(...
                 'ExecutionMode', 'fixedRate', ...       % Run timer repeatedly.
                 'Period', 1, ...                        % Initial period is 1 sec.
                 'TimerFcn', @(~,~)check_status(handles)); % Specify callback function.
-            start(handles.timer)
             
             % set button string
             set(handles.connectButton, 'String', 'Disconnect')
-            set(handles.open_push, 'BackgroundColor', 'yellow');
+            set(handles.open_push, 'BackgroundColor', ...
+                get(0,'defaultUicontrolBackgroundColor'));
             set(handles.conn_text, 'String', 'Connected')
             
             % switch connect indicator
             axes(handles.connect_indicator);
             rectangle('Curvature',[1 1], 'FaceColor', 'green')
             axis off equal
+            
+            isConnect = 1;
 
         catch e
             delete(instrfindall);
@@ -242,9 +250,6 @@ else
     
     % close serial connection
     fclose(handles.serConn);
-    
-    % stop periodic status check
-    stop(handles.timer)
     
     % disable text field 
     set(handles.Tx_send, 'Enable', 'Off');
@@ -270,9 +275,17 @@ else
     axis off equal
     set(handles.err_text, 'String', 'Disconnected')
     
+    isDisconnect = 1;
+    
     
 end
 guidata(hObject, handles);
+
+if isConnect
+    start(handles.timer)
+elseif isDisconnect
+    stop(handles.timer)
+end
 end
 
 function status = check_status(handles)
@@ -281,12 +294,30 @@ statArray = {};
 count = 1;
 done = 0;
 
+% this pause is required to interrupt when stopping the timer
+pause(0.2)
+
 if isfield(handles, 'serConn')
-    fprintf(handles.serConn, 's?');
+    try
+        fprintf(handles.serConn, 's?');
+        notConnected = 0;
+    catch ME
+        notConnected = 1;
+    end
 end
 
+if notConnected
+    axes(handles.status_indicator);
+    rectangle('Curvature',[1 1], 'FaceColor', ...
+        get(0, 'defaultUicontrolBackgroundColor'));
+    axis off equal
+    set(handles.err_text, 'String', 'Disconnected')
+    set(handles.open_push, 'Enable', 'Off');
+    
+    return
+end
 while ~done
-    [done, ~, statArray{count}] = receive_data(handles);
+    [done, ~, statArray{count}] = receive_data(handles, 1);
     count = count + 1;
 end
 
@@ -299,13 +330,6 @@ status.preamp1Err = isempty(strfind(statArray{4}, 'PREAMP1 =1'));
 status.guard1Err = isempty(strfind(statArray{5}, ' circuit 1 = 1'));
 status.errState = any([status.preamp1Err, status.guard1Err, ...
     status.interlockOn, status.keyOff]);
-
-if status.errState
-    axes(handles.status_indicator);
-    rectangle('Curvature',[1 1], 'FaceColor', 'yellow');
-    axis off equal
-    set(handles.err_text, 'String', 'Undefined Error')
-    set(handles.open_push, 'Enable', 'Off');
     
     if status.keyOff
         axes(handles.status_indicator);
@@ -313,28 +337,66 @@ if status.errState
         axis off equal
         set(handles.err_text, 'String', 'Key locked')
         set(handles.open_push, 'Enable', 'Off');
-    end
-    if status.interlockOn
+    elseif status.interlockOn
         axes(handles.status_indicator);
         rectangle('Curvature',[1 1], 'FaceColor', 'yellow');
         axis off equal
         set(handles.err_text, 'String', 'Interlock active')
         set(handles.open_push, 'Enable', 'Off');
-    end
-    if status.preamp1Err
+    elseif status.preamp1Err
         axes(handles.status_indicator);
         rectangle('Curvature',[1 1], 'FaceColor', 'red');
         axis off equal
         set(handles.err_text, 'String', 'Preamp error')
         set(handles.open_push, 'Enable', 'Off');
+    elseif status.errState
+        axes(handles.status_indicator);
+        rectangle('Curvature',[1 1], 'FaceColor', 'yellow');
+        axis off equal
+        set(handles.err_text, 'String', 'Undefined Error')
+        set(handles.open_push, 'Enable', 'Off');
+    else
+        axes(handles.status_indicator);
+        rectangle('Curvature',[1 1], 'FaceColor', 'green');
+        axis off equal
+        set(handles.open_push, 'BackgroundColor', 'yellow');
+        set(handles.open_push, 'Enable', 'On');
+        set(handles.err_text, 'String', 'No errors');
     end
-else
-    axes(handles.status_indicator);
-    rectangle('Curvature',[1 1], 'FaceColor', 'green');
-    axis off equal
-    set(handles.open_push, 'Enable', 'On');
-    set(handles.err_text, 'String', 'No errors');
-end
+    
+    pause(.2)
+
+    % Check laser emission
+    fprintf(handles.serConn, 'le?');
+    done = 0;
+    count = 1;
+    while ~done
+        [done, ~, emResp{count}] = receive_data(handles, 1);
+        count = count + 1;
+    end
+    status.emissionOn = isempty(strfind(emResp{2}, 'le=0'));
+        
+    if status.emissionOn     
+        set(handles.open_push,'Value', 1)
+        set(handles.open_push, 'String','Shutter open!');
+        set(handles.open_push, 'BackgroundColor', 'red');
+        axes(handles.emission_indicator);
+        rectangle('Curvature',[1 1], 'FaceColor', 'green')
+        axis off equal
+        
+        set(handles.emission_text, 'String', 'Emission')
+    else
+        set(handles.open_push,'Value', 0)
+        set(handles.open_push, 'String','Open Shutter');
+        set(handles.open_push, 'BackgroundColor', 'yellow');
+        axes(handles.emission_indicator);
+        rectangle('Curvature',[1 1], 'FaceColor', ...
+            get(0,'defaultUicontrolBackgroundColor'))
+        axis off equal
+        
+        set(handles.emission_text, 'String', 'No Emission')
+    end
+
 end % end of check_status
 
 % --- Executes when user attempts to close figure1.
@@ -368,23 +430,13 @@ try
     if get(hObject,'Value')
         set(hObject,'Value', 0)
         if isfield(handles, 'serConn')
-            
-            % check status
-            status = check_status(handles);
-            if status.keyOff
-                error('Key still in ''Off'' position')
-            elseif status.interlockOn
-                error('Interlock still active')
-            elseif status.preamp1Err
-                error('Preamp Error')
-            end
-            
+                      
             TxText = 'le=1';
             fprintf(handles.serConn, TxText);
             
             done=0;
             while ~done
-                [done, handles] = receive_data(handles);
+                [done, handles] = receive_data(handles, 1);
             end
             
             set(hObject,'Value', 1)
@@ -407,11 +459,12 @@ try
             
             done=0;
             while ~done
-                [done, handles] = receive_data(handles);
+                [done, handles] = receive_data(handles, 1);
             end
             set(hObject,'Value', 0);
             set(hObject, 'String', 'Open shutter');
             set(hObject, 'BackgroundColor', 'yellow');
+            start(handles.timer)
             
             axes(handles.emission_indicator);
             rectangle('Curvature',[1 1], 'FaceColor', ...
