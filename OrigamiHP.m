@@ -179,6 +179,8 @@ if strcmp(get(hObject,'String'),'Connect') % currently disconnected
         
         try
             fopen(serConn);
+            
+            % assign serial connection to handles
             handles.serConn = serConn;
             
             % send status query
@@ -202,6 +204,7 @@ if strcmp(get(hObject,'String'),'Connect') % currently disconnected
             
             if ~isGood
                 fclose(handles.serConn);
+                handles = rmfield(handles, 'serConn');
                 error('Device not found on selected COM port.');
             end
             
@@ -228,33 +231,46 @@ if strcmp(get(hObject,'String'),'Connect') % currently disconnected
 
         catch e
             delete(instrfindall);
+            if isfield(handles, 'serConn')
+                rmfield(handles, 'serConn');
+            end
             errordlg(e.message);
         end
         
     end
 else
     
+    % close serial connection
+    fclose(handles.serConn);
+    
+    % stop periodic status check
     stop(handles.timer)
     
+    % disable text field 
     set(handles.Tx_send, 'Enable', 'Off');
-    set(handles.open_push, 'Enable', 'Off');
     
-    set(hObject, 'String','Connect')
+    % diable and re-label open shutter button
+    set(handles.open_push, 'Enable', 'Off');
     set(handles.open_push, 'BackgroundColor', ...
         get(0,'defaultUicontrolBackgroundColor'));
     set(handles.open_push, 'String', 'Open Shutter');
-    fclose(handles.serConn);
     
+    % label connect button
+    set(hObject, 'String','Connect')
+    
+    % change indicator colors
     axes(handles.connect_indicator);
     rectangle('Curvature',[1 1], 'FaceColor', 'red');
     axis off equal
+    set(handles.conn_text, 'String', 'Disconnected')
     
     axes(handles.status_indicator);
     rectangle('Curvature',[1 1], 'FaceColor', ...
         get(0,'defaultUicontrolBackgroundColor'));
     axis off equal
+    set(handles.err_text, 'String', 'Disconnected')
     
-    set(handles.conn_text, 'String', 'Disconnected')
+    
 end
 guidata(hObject, handles);
 end
@@ -327,7 +343,11 @@ function figure1_CloseRequestFcn(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 if isfield(handles, 'serConn')
-    fclose(handles.serConn);
+    try
+        fclose(handles.serConn);
+    catch ME
+        warning(ME.message);
+    end
 end
 % Hint: delete(hObject) closes the figure
 delete(hObject);
@@ -344,76 +364,73 @@ function open_push_Callback(hObject, eventdata, handles)
 % hObject    handle to open_push (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-if get(hObject,'Value')
-    set(hObject,'Value', 0)
-    if isfield(handles, 'serConn')
-        
-        % check status
-        status = check_status(handles);
-        if status.keyOff
-            warning('Key still in ''Off'' position')
-            return
-        elseif status.interlockOn
-            warning('Interlock still active')
-            return
-        elseif status.preamp1Err
-            warning('Preamp Error')
-            return
-        end
+try
+    if get(hObject,'Value')
+        set(hObject,'Value', 0)
+        if isfield(handles, 'serConn')
             
-        TxText = 'le=1';
-        fprintf(handles.serConn, TxText);
-        
-        done=0;
-        while ~done
-            [done, handles] = receive_data(handles);
+            % check status
+            status = check_status(handles);
+            if status.keyOff
+                error('Key still in ''Off'' position')
+            elseif status.interlockOn
+                error('Interlock still active')
+            elseif status.preamp1Err
+                error('Preamp Error')
+            end
+            
+            TxText = 'le=1';
+            fprintf(handles.serConn, TxText);
+            
+            done=0;
+            while ~done
+                [done, handles] = receive_data(handles);
+            end
+            
+            set(hObject,'Value', 1)
+            set(hObject, 'String','Shutter open!');
+            set(hObject, 'BackgroundColor', 'red');
+            axes(handles.emission_indicator);
+            rectangle('Curvature',[1 1], 'FaceColor', 'green')
+            axis off equal
+            
+            set(handles.emission_text, 'String', 'Emission')
+            
+        else
+            error('Not Connected. Please connect first');
         end
         
-        set(hObject,'Value', 1)
-        set(hObject, 'String','Shutter open!');
-        set(hObject, 'BackgroundColor', 'red');
-        axes(handles.emission_indicator);
-        rectangle('Curvature',[1 1], 'FaceColor', 'green')
-        axis off equal
-        
-        set(handles.emission_text, 'String', 'Emission')
-        
     else
-        warning('Not Connected. Please connect first');
-    end
-    
-else
-    if isfield(handles, 'serConn')
-        TxText = 'le=0';
-        fprintf(handles.serConn, TxText);
-        
-%         currList = get(handles.history_box, 'String');
-%         
-%         set(handles.history_box, 'String', ...
-%             [currList ; ['Sent @ ' datestr(now) ': ' TxText] ]);
-%         set(handles.history_box, 'Value', length(currList) + 1 );
-%         
-%         set(hObject, 'String', '');
-        
-        done=0;
-        while ~done
-            [done, handles] = receive_data(handles);
+        if isfield(handles, 'serConn')
+            TxText = 'le=0';
+            fprintf(handles.serConn, TxText);
+            
+            done=0;
+            while ~done
+                [done, handles] = receive_data(handles);
+            end
+            set(hObject,'Value', 0);
+            set(hObject, 'String', 'Open shutter');
+            set(hObject, 'BackgroundColor', 'yellow');
+            
+            axes(handles.emission_indicator);
+            rectangle('Curvature',[1 1], 'FaceColor', ...
+                get(0,'defaultUicontrolBackgroundColor'))
+            axis off equal
+            
+            set(handles.emission_text, 'String', 'No Emission')
+        else
+            error('Not Connected or connection lost. Check shutter state on Driver.');
         end
-        set(hObject,'Value', 0);
-        set(hObject, 'String', 'Open shutter');
-        set(hObject, 'BackgroundColor', 'yellow');
-        
-        axes(handles.emission_indicator);
-        rectangle('Curvature',[1 1], 'FaceColor', ...
-            get(0,'defaultUicontrolBackgroundColor'))
-        axis off equal
-    
-        set(handles.emission_text, 'String', 'No Emission')
-    else
-        warning('Not Connected or connection lost. Check shutter state on Driver.');
     end
+catch ME
+    errordlg(ME.message);
 end
 % Hint: get(hObject,'Value') returns toggle state of open_push
+end
+
+function portList_Callback(hObject, eventdata, handles)
+
 end
 
 % --- Executes during object creation, after setting all properties.
