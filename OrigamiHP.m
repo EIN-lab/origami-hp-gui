@@ -31,11 +31,11 @@ function varargout = OrigamiHP(varargin)
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
 gui_State = struct('gui_Name',       mfilename, ...
-                   'gui_Singleton',  gui_Singleton, ...
-                   'gui_OpeningFcn', @OrigamiHP_OpeningFcn, ...
-                   'gui_OutputFcn',  @OrigamiHP_OutputFcn, ...
-                   'gui_LayoutFcn',  [] , ...
-                   'gui_Callback',   []);
+    'gui_Singleton',  gui_Singleton, ...
+    'gui_OpeningFcn', @OrigamiHP_OpeningFcn, ...
+    'gui_OutputFcn',  @OrigamiHP_OutputFcn, ...
+    'gui_LayoutFcn',  [] , ...
+    'gui_Callback',   []);
 if nargin && ischar(varargin{1})
     gui_State.gui_Callback = str2func(varargin{1});
 end
@@ -55,7 +55,7 @@ serialPorts = instrhwinfo('serial');
 nPorts = length(serialPorts.SerialPorts);
 set(handles.portList, 'String', ...
     [{'Select a port'} ; serialPorts.SerialPorts ]);
-set(handles.portList, 'Value', numel(get(handles.portList, 'String')));   
+set(handles.portList, 'Value', numel(get(handles.portList, 'String')));
 set(handles.history_box, 'String', cell(1));
 
 handles.output = hObject;
@@ -68,7 +68,7 @@ guidata(hObject, handles);
 end
 
 % --- Outputs from this function are returned to the command line.
-function varargout = OrigamiHP_OutputFcn(hObject, eventdata, handles) 
+function varargout = OrigamiHP_OutputFcn(hObject, eventdata, handles)
 % varargout  cell array for returning output args (see VARARGOUT);
 % hObject    handle to figure
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -134,12 +134,12 @@ wngState = warning();
 warning('Off', 'MATLAB:serial:fscanf:unsuccessfulRead');
 done = 0;
 RxText = [];
-try 
+try
     RxText = fscanf(handles.serConn);
     currList = get(handles.history_box, 'String');
     if isempty(RxText)
-       done = 1;
-       return
+        done = 1;
+        return
     else
         if ~doSilent
             set(handles.history_box, 'String', ...
@@ -235,8 +235,10 @@ if strcmp(get(hObject,'String'),'Connect') % currently disconnected
             rectangle('Curvature',[1 1], 'FaceColor', 'green')
             axis off equal
             
-            isConnect = 1;
+            guidata(hObject, handles);
 
+            start(handles.timer);
+            
         catch e
             delete(instrfindall);
             if isfield(handles, 'serConn')
@@ -248,10 +250,14 @@ if strcmp(get(hObject,'String'),'Connect') % currently disconnected
     end
 else
     
+    stop(handles.timer)
+    
+    pause(2);
+    
     % close serial connection
     fclose(handles.serConn);
     
-    % disable text field 
+    % disable text field
     set(handles.Tx_send, 'Enable', 'Off');
     
     % diable and re-label open shutter button
@@ -277,15 +283,10 @@ else
     
     isDisconnect = 1;
     
+    guidata(hObject, handles);
     
 end
-guidata(hObject, handles);
 
-if isConnect
-    start(handles.timer)
-elseif isDisconnect
-    stop(handles.timer)
-end
 end
 
 function status = check_status(handles)
@@ -321,6 +322,16 @@ while ~done
     count = count + 1;
 end
 
+% Check laser emission
+fprintf(handles.serConn, 'le?');
+done = 0;
+count = 1;
+while ~done
+    [done, ~, emResp{count}] = receive_data(handles, 1);
+    count = count + 1;
+end
+status.emissionOn = isempty(strfind(emResp{2}, 'le=0'));
+
 % Omit first line (prompt repeat)
 statArray = statArray(3:end);
 
@@ -330,73 +341,72 @@ status.preamp1Err = isempty(strfind(statArray{4}, 'PREAMP1 =1'));
 status.guard1Err = isempty(strfind(statArray{5}, ' circuit 1 = 1'));
 status.errState = any([status.preamp1Err, status.guard1Err, ...
     status.interlockOn, status.keyOff]);
-    
-    if status.keyOff
-        axes(handles.status_indicator);
-        rectangle('Curvature',[1 1], 'FaceColor', 'yellow');
-        axis off equal
-        set(handles.err_text, 'String', 'Key locked')
-        set(handles.open_push, 'Enable', 'Off');
-    elseif status.interlockOn
-        axes(handles.status_indicator);
-        rectangle('Curvature',[1 1], 'FaceColor', 'yellow');
-        axis off equal
-        set(handles.err_text, 'String', 'Interlock active')
-        set(handles.open_push, 'Enable', 'Off');
-    elseif status.preamp1Err
-        axes(handles.status_indicator);
-        rectangle('Curvature',[1 1], 'FaceColor', 'red');
-        axis off equal
-        set(handles.err_text, 'String', 'Preamp error')
-        set(handles.open_push, 'Enable', 'Off');
-    elseif status.errState
-        axes(handles.status_indicator);
-        rectangle('Curvature',[1 1], 'FaceColor', 'yellow');
-        axis off equal
-        set(handles.err_text, 'String', 'Undefined Error')
-        set(handles.open_push, 'Enable', 'Off');
-    else
-        axes(handles.status_indicator);
-        rectangle('Curvature',[1 1], 'FaceColor', 'green');
-        axis off equal
-        set(handles.open_push, 'BackgroundColor', 'yellow');
-        set(handles.open_push, 'Enable', 'On');
-        set(handles.err_text, 'String', 'No errors');
-    end
-    
-    pause(.2)
 
-    % Check laser emission
-    fprintf(handles.serConn, 'le?');
-    done = 0;
-    count = 1;
-    while ~done
-        [done, ~, emResp{count}] = receive_data(handles, 1);
-        count = count + 1;
-    end
-    status.emissionOn = isempty(strfind(emResp{2}, 'le=0'));
-        
-    if status.emissionOn     
-        set(handles.open_push,'Value', 1)
-        set(handles.open_push, 'String','Shutter open!');
-        set(handles.open_push, 'BackgroundColor', 'red');
-        axes(handles.emission_indicator);
-        rectangle('Curvature',[1 1], 'FaceColor', 'green')
-        axis off equal
-        
-        set(handles.emission_text, 'String', 'Emission')
-    else
-        set(handles.open_push,'Value', 0)
-        set(handles.open_push, 'String','Open Shutter');
-        set(handles.open_push, 'BackgroundColor', 'yellow');
+statusLight = 'g';
+errText = 'No Errors';
+openCol = 'y';
+openPush = 'On';
+
+if status.keyOff
+    statusLight = 'y';
+    errText = 'Key Locked';
+    openCol = get(0, 'defaultUiControlBackgroundColor');
+    openPush = 'Off';
+elseif status.interlockOn
+    statusLight = 'y';
+    errText = 'Interlock Active';
+    openCol = get(0, 'defaultUiControlBackgroundColor');
+    openPush = 'Off';
+elseif status.preamp1Err
+    statusLight = 'r';
+    errText = 'Preamp Error';
+    openCol = get(0, 'defaultUiControlBackgroundColor');
+    openPush = 'Off';
+elseif status.errState
+    statusLight = 'y';
+    errText = 'Error';
+    openCol = get(0, 'defaultUiControlBackgroundColor');
+    openPush = 'Off';
+end
+
+pause(.2)
+
+isDisconnected = strcmp(get(handles.connectButton,'String'),'Connect');
+
+if status.emissionOn
+    set(handles.open_push,'Value', 1, ...
+        'String','Shutter open!')
+    openCol = 'r';
+    
+    axes(handles.emission_indicator);
+    rectangle('Curvature',[1 1], 'FaceColor', 'green')
+    axis off equal
+    
+    set(handles.emission_text, 'String', 'Emission')
+else
+    if ~status.errState && ~isDisconnected
         axes(handles.emission_indicator);
         rectangle('Curvature',[1 1], 'FaceColor', ...
-            get(0,'defaultUicontrolBackgroundColor'))
+            get(0, 'defaultUiControlBackgroundColor'))
         axis off equal
-        
         set(handles.emission_text, 'String', 'No Emission')
+        set(handles.open_push,...
+            'Value', 0, ...
+            'String','Open shutter');
+            openCol = 'y';
     end
+end
 
+if ~isDisconnected
+    % Set status lights and texts
+    axes(handles.status_indicator);
+    rectangle('Curvature',[1 1], 'FaceColor', statusLight);
+    axis off equal
+    set(handles.err_text, 'String', errText);
+    
+    set(handles.open_push, 'Enable', openPush, ...
+        'BackgroundColor', openCol);
+end
 end % end of check_status
 
 % --- Executes when user attempts to close figure1.
@@ -430,7 +440,7 @@ try
     if get(hObject,'Value')
         set(hObject,'Value', 0)
         if isfield(handles, 'serConn')
-                      
+            
             TxText = 'le=1';
             fprintf(handles.serConn, TxText);
             
@@ -472,7 +482,8 @@ try
             
             set(handles.emission_text, 'String', 'No Emission')
         else
-            error('Not Connected or connection lost. Check shutter state on Driver.');
+            error(['Not connected or connection lost.', ...
+                'Check shutter state on Driver.']);
         end
     end
 catch ME
