@@ -464,7 +464,6 @@ try
             set(hObject,'Value', 0);
             set(hObject, 'String', 'Open shutter');
             set(hObject, 'BackgroundColor', 'yellow');
-            start(handles.timer)
             
             axes(handles.emission_indicator);
             rectangle('Curvature',[1 1], 'FaceColor', ...
